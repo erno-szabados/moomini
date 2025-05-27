@@ -1,0 +1,9 @@
+DEFINITION MODULE UTF8;
+
+PROCEDURE IsValidUTF8(buf: ARRAY OF CHAR; len: CARDINAL): BOOLEAN;
+(* Returns TRUE if buf[0..len-1] is valid UTF-8 *)
+
+PROCEDURE SkipBOM(VAR buf: ARRAY OF CHAR; VAR len: CARDINAL);
+(* If BOM is present at start, advances buf/len past it *)
+
+END UTF8.
