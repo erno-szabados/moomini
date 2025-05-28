@@ -15,4 +15,11 @@ PROCEDURE CodePointToUTF8(codePoint: CARDINAL; VAR buffer: ARRAY OF CHAR; VAR by
 (* Converts a Unicode code point to UTF-8 and writes it to buffer.
    Returns TRUE if successful, FALSE if the code point is invalid or buffer is too small. *)
 
+PROCEDURE NextCodePoint(VAR byteArray: ARRAY OF CHAR; VAR index: CARDINAL; VAR codePoint: CARDINAL): BOOLEAN;
+(* Reads the next UTF-8 character (code point) from a byte array, advances the index, and returns the code point.  *)
+(* Returns FALSE if the end of the array is reached or an invalid sequence is encountered. *)
+
+PROCEDURE PrevCodePoint(VAR byteArray: ARRAY OF CHAR; VAR index: CARDINAL; VAR codePoint: CARDINAL): BOOLEAN;
+(* Similar to NextCodePoint but reads the previous code point by moving backward from the current index. *)
+
 END UTF8.

@@ -1,6 +1,6 @@
 MODULE TestUTF8;
 
-FROM UTF8 IMPORT IsValidUTF8, SkipBOM, UTF8CharLen, CodePointToUTF8;
+FROM UTF8 IMPORT IsValidUTF8, SkipBOM, UTF8CharLen, CodePointToUTF8, NextCodePoint;
 FROM StrIO IMPORT WriteString, WriteLn;
 FROM WholeStr IMPORT IntToStr;
 
@@ -237,9 +237,69 @@ BEGIN
   WriteLn;
 END TestCodePointToUTF8;
 
+PROCEDURE TestNextCodePoint;
+VAR
+  buf: ARRAY [0..7] OF CHAR;
+  idx: CARDINAL;
+  cp: CARDINAL;
+  ok: BOOLEAN;
+BEGIN
+  WriteString("TestNextCodePoint:"); WriteLn;
+
+  (* 1-byte ASCII *)
+  buf[0] := 'A'; buf[1] := 'B'; buf[2] := 0C;
+  idx := 0;
+  ok := NextCodePoint(buf, idx, cp);
+  WriteString("  'A': ");
+  IF ok & (cp = ORD('A')) & (idx = 1) THEN WriteString("PASS") ELSE WriteString("FAIL") END;
+  WriteLn;
+
+  (* 2-byte UTF-8: é (U+00E9) *)
+  buf[0] := CHR(0C3H); buf[1] := CHR(0A9H); buf[2] := 0C;
+  idx := 0;
+  ok := NextCodePoint(buf, idx, cp);
+  WriteString("  é (U+00E9): ");
+  IF ok & (cp = 0E9H) & (idx = 2) THEN WriteString("PASS") ELSE WriteString("FAIL") END;
+  WriteLn;
+
+  (* 3-byte UTF-8: € (U+20AC) *)
+  buf[0] := CHR(0E2H); buf[1] := CHR(082H); buf[2] := CHR(0ACH); buf[3] := 0C;
+  idx := 0;
+  ok := NextCodePoint(buf, idx, cp);
+  WriteString("  € (U+20AC): ");
+  IF ok & (cp = 020ACH) & (idx = 3) THEN WriteString("PASS") ELSE WriteString("FAIL") END;
+  WriteLn;
+
+  (* 4-byte UTF-8: 💖 (U+1F496) *)
+  buf[0] := CHR(0F0H); buf[1] := CHR(09FH); buf[2] := CHR(092H); buf[3] := CHR(096H); buf[4] := 0C;
+  idx := 0;
+  ok := NextCodePoint(buf, idx, cp);
+  WriteString("  💖 (U+1F496): ");
+  IF ok & (cp = 01F496H) & (idx = 4) THEN WriteString("PASS") ELSE WriteString("FAIL") END;
+  WriteLn;
+
+  (* Invalid sequence: continuation byte as first *)
+  buf[0] := CHR(080H); buf[1] := 0C;
+  idx := 0;
+  ok := NextCodePoint(buf, idx, cp);
+  WriteString("  Invalid (continuation as first): ");
+  IF NOT ok THEN WriteString("PASS") ELSE WriteString("FAIL") END;
+  WriteLn;
+
+  (* End of buffer *)
+  buf[0] := 'A'; buf[1] := 0C;
+  idx := 2;
+  ok := NextCodePoint(buf, idx, cp);
+  WriteString("  End of buffer: ");
+  IF NOT ok THEN WriteString("PASS") ELSE WriteString("FAIL") END;
+  WriteLn;
+END TestNextCodePoint;
+
+
 BEGIN
   TestIsValidUTF8;
   TestSkipBOM;
   TestUTF8CharLen;
   TestCodePointToUTF8;
+  TestNextCodePoint;
 END TestUTF8.
