@@ -4,13 +4,6 @@ FROM StrIO IMPORT WriteString, WriteLn;
 FROM WholeStr IMPORT CardToStr, IntToStr;
 FROM SYSTEM IMPORT SHIFT, CAST;
 
-(* This module provides utilities for handling UTF-8 encoded text,
-   including checking validity and skipping the Byte Order Mark (BOM). *)
-
-(* UTF-8 encoding constants for Byte Order Mark (BOM) *)
-(* BOM is used to indicate that the text is encoded in UTF-8 *)
-(* BOM: EF BB BF in hexadecimal, which corresponds to 0xEF, 0xBB, 0xBF in decimal *)
-
 CONST
   Bom0 = CHR(0EFH);
   Bom1 = CHR(0BBH);
@@ -22,18 +15,11 @@ CONST
   Mask4B = BITSET{7,6,5,4,3}; (*0b11111000*)
 
 PROCEDURE UTF8CharLen(firstByte: CHAR): CARDINAL;
+(* Determine the length of a UTF-8 character based on the first byte *)
 VAR
   b: BITSET;
   ord: CARDINAL;
 BEGIN
-
-  (* Masks for UTF-8 character lengths *)
-  
-  (* Check the first byte to determine the length of the UTF-8 character *)
-  (* 1-byte: 0xxxxxxx *)
-  (* 2-byte: 110xxxxx 10xxxxxx *)
-  (* 3-byte: 1110xxxx 10xxxxxx 10xxxxxx *)
-  (* 4-byte: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx *)
   b := VAL(BITSET, firstByte);
   IF (b * Mask1B) = {} THEN
     RETURN 1;
@@ -49,9 +35,9 @@ BEGIN
   END;
 END UTF8CharLen;
 
-(* Determine the length of a UTF-8 character based on the first byte *)
 
 PROCEDURE IsValidUTF8(buf: ARRAY OF CHAR; len: CARDINAL): BOOLEAN;
+(* Determine if passed buffer contains a valid UTF-8 sequence. *)
 VAR
   i: CARDINAL;
   c: CHAR;
@@ -106,6 +92,7 @@ BEGIN
 END IsValidUTF8;
 
 PROCEDURE CodePointToUTF8(codePoint: CARDINAL; VAR buffer: ARRAY OF CHAR; VAR bytesWritten: CARDINAL): BOOLEAN;
+(* Convert the passed UTF-8 codepoint to a byte sequence. *)
 VAR
   c: CARDINAL;
   bits: BITSET;
@@ -161,6 +148,7 @@ END CodePointToUTF8;
 
 
 PROCEDURE SkipBOM(VAR buf: ARRAY OF CHAR; VAR len: CARDINAL);
+(* Modify the passed buffer by copying it to skip the UTF-8 BOM. *)
 VAR
   i: CARDINAL;
 BEGIN
