@@ -15,6 +15,36 @@ CONST
   BOM1 = CHR(0BBH);
   BOM2 = CHR(0BFH);
 
+PROCEDURE UTF8CharLen(firstByte: CHAR): CARDINAL;
+VAR
+  b: BITSET;
+  ord: CARDINAL;
+BEGIN
+  b := VAL(BITSET, firstByte);
+  ord := ORD(firstByte);
+  IF (b * {7}) = {} THEN
+    RETURN 1;
+  ELSIF (b * {7,6}) = {7,6} THEN
+    IF (b * {5}) = {} THEN
+      RETURN 2;
+    ELSIF (b * {5,4}) = {5} THEN
+      RETURN 3;
+    ELSIF (b * {5,4}) = {5,4} THEN
+      IF ord <= 0F4H THEN
+        RETURN 4;
+      ELSE
+        RETURN 0;
+      END;
+    ELSE
+      RETURN 0;
+    END;
+  ELSE
+    RETURN 0;
+  END;
+END UTF8CharLen;
+
+(* Determine the length of a UTF-8 character based on the first byte *)
+
 PROCEDURE IsValidUTF8(buf: ARRAY OF CHAR; len: CARDINAL): BOOLEAN;
 VAR
   i: CARDINAL;

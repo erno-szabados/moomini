@@ -1,7 +1,8 @@
 MODULE TestUTF8;
 
-FROM UTF8 IMPORT IsValidUTF8, SkipBOM;
+FROM UTF8 IMPORT IsValidUTF8, SkipBOM, UTF8CharLen;
 FROM StrIO IMPORT WriteString, WriteLn;
+FROM WholeStr IMPORT IntToStr; 
 
 PROCEDURE TestIsValidUTF8;
 VAR
@@ -71,7 +72,74 @@ BEGIN
   WriteLn;
 END TestSkipBOM;
 
+PROCEDURE TestUTF8CharLen;
+VAR
+  b: CHAR;
+  len: CARDINAL;
+  allPass: BOOLEAN;
+  str: ARRAY [0..15] OF CHAR;
+BEGIN
+  WriteString("TestUTF8CharLen:" ); WriteLn;
+  allPass := TRUE;
+
+  (* 1-byte ASCII *)
+  b := 'A';
+  len := UTF8CharLen(b);
+  WriteString("  ASCII ('A'): expected 1, got ");
+  IntToStr(len, str); WriteString(str);
+  IF len = 1 THEN WriteString(" PASS") ELSE WriteString(" FAIL"); allPass := FALSE; END;
+  WriteLn;
+
+  (* 2-byte leading byte: 110xxxxx *)
+  b := CHR(0C3H);  (* 11000011 *)
+  len := UTF8CharLen(b);
+  WriteString("  2-byte (0xC3): expected 2, got ");
+  IntToStr(len, str); WriteString(str);
+  IF len = 2 THEN WriteString(" PASS") ELSE WriteString(" FAIL"); allPass := FALSE; END;
+  WriteLn;
+
+  (* 3-byte leading byte: 1110xxxx *)
+  b := CHR(0E2H);  (* 11100010 *)
+  len := UTF8CharLen(b);
+  WriteString("  3-byte (0xE2): expected 3, got ");
+  IntToStr(len, str); WriteString(str);
+  IF len = 3 THEN WriteString(" PASS") ELSE WriteString(" FAIL"); allPass := FALSE; END;
+  WriteLn;
+
+  (* 4-byte leading byte: 11110xxx *)
+  b := CHR(0F0H);  (* 11110000 *)
+  len := UTF8CharLen(b);
+  WriteString("  4-byte (0xF0): expected 4, got ");
+  IntToStr(len, str); WriteString(str);
+  IF len = 4 THEN WriteString(" PASS") ELSE WriteString(" FAIL"); allPass := FALSE; END;
+  WriteLn;
+
+  (* Continuation byte: 10xxxxxx *)
+  b := CHR(080H);  (* 10000000 *)
+  len := UTF8CharLen(b);
+  WriteString("  Continuation (0x80): expected 0, got ");
+  IntToStr(len, str); WriteString(str);
+  IF len = 0 THEN WriteString(" PASS") ELSE WriteString(" FAIL"); allPass := FALSE; END;
+  WriteLn;
+
+  (* Invalid leading byte: 11111111 *)
+  b := CHR(0FFH);
+  len := UTF8CharLen(b);
+  WriteString("  Invalid (0xFF): expected 0, got ");
+  IntToStr(len, str); WriteString(str);
+  IF len = 0 THEN WriteString(" PASS") ELSE WriteString(" FAIL"); allPass := FALSE; END;
+  WriteLn;
+
+  IF allPass THEN
+    WriteString("TestUTF8CharLen: ALL PASS");
+  ELSE
+    WriteString("TestUTF8CharLen: SOME FAIL");
+  END;
+  WriteLn;
+END TestUTF8CharLen;
+
 BEGIN
   TestIsValidUTF8;
   TestSkipBOM;
+  TestUTF8CharLen;
 END TestUTF8.

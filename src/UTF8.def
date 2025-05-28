@@ -1,5 +1,10 @@
 DEFINITION MODULE UTF8;
 
+(* This module implements UTF-8 utility procedures. *)
+
+PROCEDURE UTF8CharLen(firstByte: CHAR): CARDINAL;
+(* Returns the number of bytes in a UTF-8 character starting with firstByte *)
+
 PROCEDURE IsValidUTF8(buf: ARRAY OF CHAR; len: CARDINAL): BOOLEAN;
 (* Returns TRUE if buf[0..len-1] is valid UTF-8 *)
 
