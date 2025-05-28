@@ -207,10 +207,54 @@ BEGIN
 END NextCodePoint;
 
 PROCEDURE PrevCodePoint(VAR byteArray: ARRAY OF CHAR; VAR index: CARDINAL; VAR codePoint: CARDINAL): BOOLEAN;
-(* Similar to NextCodePoint but reads the previous code point by moving backward from the current index. *)
+(* Reads the previous UTF-8 character (code point) from a byte array, moves index back, and returns the code point. *)
+VAR
+  start, i, len: CARDINAL;
+  b: BITSET;
+  first: CHAR;
+  cp: CARDINAL;
 BEGIN
-  (* TODO *)
-  RETURN FALSE;
+  IF index = 0 THEN RETURN FALSE END;
+  start := index;
+
+  (* Move back to the first byte of the previous code point *)
+  i := start - 1;
+  (* At most 3 continuation bytes before a leading byte *)
+  WHILE (i > 0) & ((VAL(BITSET, byteArray[i]) * BITSET{7,6}) = BITSET{7}) DO
+    DEC(i);
+  END;
+
+  (* Now i should point to the first byte of the code point *)
+  first := byteArray[i];
+  len := UTF8CharLen(first);
+
+  IF (len = 0) OR (i + len > start) OR (i + len > HIGH(byteArray) + 1) OR (i + len <> start) THEN
+    RETURN FALSE
+  END;
+
+  (* Check continuation bytes *)
+  FOR start := 1 TO len-1 DO
+    b := VAL(BITSET, byteArray[i + start]);
+    IF (b * BITSET{7,6}) # BITSET{7} THEN RETURN FALSE END;
+  END;
+
+  (* Decode code point *)
+  IF len = 1 THEN
+    cp := ORD(first);
+  ELSIF len = 2 THEN
+    cp := ((ORD(first) - 0C0H) * 64) + (ORD(byteArray[i+1]) - 080H);
+  ELSIF len = 3 THEN
+    cp := ((ORD(first) - 0E0H) * 4096) + ((ORD(byteArray[i+1]) - 080H) * 64) + (ORD(byteArray[i+2]) - 080H);
+  ELSIF len = 4 THEN
+    cp := ((ORD(first) - 0F0H) * 262144) + ((ORD(byteArray[i+1]) - 080H) * 4096) +
+          ((ORD(byteArray[i+2]) - 080H) * 64) + (ORD(byteArray[i+3]) - 080H);
+  ELSE
+    RETURN FALSE;
+  END;
+
+  codePoint := cp;
+  index := i;
+  RETURN TRUE;
 END PrevCodePoint;
 
 END UTF8.

@@ -1,6 +1,6 @@
 MODULE TestUTF8;
 
-FROM UTF8 IMPORT IsValidUTF8, SkipBOM, UTF8CharLen, CodePointToUTF8, NextCodePoint;
+FROM UTF8 IMPORT IsValidUTF8, SkipBOM, UTF8CharLen, CodePointToUTF8, NextCodePoint, PrevCodePoint;
 FROM StrIO IMPORT WriteString, WriteLn;
 FROM WholeStr IMPORT IntToStr;
 
@@ -295,6 +295,64 @@ BEGIN
   WriteLn;
 END TestNextCodePoint;
 
+PROCEDURE TestPrevCodePoint;
+VAR
+  buf: ARRAY [0..7] OF CHAR;
+  idx: CARDINAL;
+  cp: CARDINAL;
+  ok: BOOLEAN;
+BEGIN
+  WriteString("TestPrevCodePoint:"); WriteLn;
+
+  (* 1-byte ASCII, move back from index 1 *)
+  buf[0] := 'A'; buf[1] := 'B'; buf[2] := 0C;
+  idx := 1;
+  ok := PrevCodePoint(buf, idx, cp);
+  WriteString("  'A' from idx=1: ");
+  IF ok & (cp = ORD('A')) & (idx = 0) THEN WriteString("PASS") ELSE WriteString("FAIL") END;
+  WriteLn;
+
+  (* 2-byte UTF-8: é (U+00E9), move back from index 2 *)
+  buf[0] := CHR(0C3H); buf[1] := CHR(0A9H); buf[2] := 0C;
+  idx := 2;
+  ok := PrevCodePoint(buf, idx, cp);
+  WriteString("  é (U+00E9) from idx=2: ");
+  IF ok & (cp = 0E9H) & (idx = 0) THEN WriteString("PASS") ELSE WriteString("FAIL") END;
+  WriteLn;
+
+  (* 3-byte UTF-8: € (U+20AC), move back from index 3 *)
+  buf[0] := CHR(0E2H); buf[1] := CHR(082H); buf[2] := CHR(0ACH); buf[3] := 0C;
+  idx := 3;
+  ok := PrevCodePoint(buf, idx, cp);
+  WriteString("  € (U+20AC) from idx=3: ");
+  IF ok & (cp = 020ACH) & (idx = 0) THEN WriteString("PASS") ELSE WriteString("FAIL") END;
+  WriteLn;
+
+  (* 4-byte UTF-8: 💖 (U+1F496), move back from index 4 *)
+  buf[0] := CHR(0F0H); buf[1] := CHR(09FH); buf[2] := CHR(092H); buf[3] := CHR(096H); buf[4] := 0C;
+  idx := 4;
+  ok := PrevCodePoint(buf, idx, cp);
+  WriteString("  💖 (U+1F496) from idx=4: ");
+  IF ok & (cp = 01F496H) & (idx = 0) THEN WriteString("PASS") ELSE WriteString("FAIL") END;
+  WriteLn;
+
+  (* Invalid: index at 0 *)
+  buf[0] := 'A'; buf[1] := 0C;
+  idx := 0;
+  ok := PrevCodePoint(buf, idx, cp);
+  WriteString("  Invalid (idx=0): ");
+  IF NOT ok THEN WriteString("PASS") ELSE WriteString("FAIL") END;
+  WriteLn;
+
+  (* Invalid: index in the middle of a multi-byte char *)
+  buf[0] := CHR(0E2H); buf[1] := CHR(082H); buf[2] := CHR(0ACH); buf[3] := 0C;
+  idx := 2; (* in the middle of a 3-byte char *)
+  ok := PrevCodePoint(buf, idx, cp);
+  WriteString("  Invalid (middle of multi-byte): ");
+  IF NOT ok THEN WriteString("PASS") ELSE WriteString("FAIL") END;
+  WriteLn;
+END TestPrevCodePoint;
+
 
 BEGIN
   TestIsValidUTF8;
@@ -302,4 +360,5 @@ BEGIN
   TestUTF8CharLen;
   TestCodePointToUTF8;
   TestNextCodePoint;
+  TestPrevCodePoint;
 END TestUTF8.
