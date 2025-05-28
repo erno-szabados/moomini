@@ -1,8 +1,8 @@
 MODULE TestUTF8;
 
-FROM UTF8 IMPORT IsValidUTF8, SkipBOM, UTF8CharLen;
+FROM UTF8 IMPORT IsValidUTF8, SkipBOM, UTF8CharLen, CodePointToUTF8;
 FROM StrIO IMPORT WriteString, WriteLn;
-FROM WholeStr IMPORT IntToStr; 
+FROM WholeStr IMPORT IntToStr;
 
 PROCEDURE TestIsValidUTF8;
 VAR
@@ -138,8 +138,108 @@ BEGIN
   WriteLn;
 END TestUTF8CharLen;
 
+PROCEDURE PrintHexBytes(buf: ARRAY OF CHAR; count: CARDINAL);
+VAR
+  i: CARDINAL;
+  str: ARRAY [0..7] OF CHAR;
+BEGIN
+  IF count = 0 THEN RETURN END;
+  IF count > LENGTH(buf) THEN count := LENGTH(buf); END;
+  FOR i := 0 TO count-1 DO
+    IF i > 0 THEN WriteString(" "); END;
+    WriteString("0x");
+    IF ORD(buf[i]) < 16 THEN WriteString("0"); END;
+    IntToStr(ORD(buf[i]), str); WriteString(str);
+  END;
+END PrintHexBytes;
+
+PROCEDURE TestCodePointToUTF8;
+VAR
+  buf: ARRAY [0..7] OF CHAR;
+  bytes: CARDINAL;
+  str: ARRAY [0..15] OF CHAR;
+  ok: BOOLEAN;
+  allPass: BOOLEAN;
+BEGIN
+  WriteString("TestCodePointToUTF8:"); WriteLn;
+  allPass := TRUE;
+
+  (* 1-byte ASCII *)
+  bytes := 0;
+  ok := CodePointToUTF8(ORD('A'), buf, bytes);
+  WriteString("  'A' (U+0041): ");
+  IF ok & (bytes = 1) & (buf[0] = 'A') THEN
+    WriteString("PASS");
+  ELSE
+    WriteString("FAIL");
+    allPass := FALSE;
+  END;
+  (* WriteString(" ["); PrintHexBytes(buf, bytes); WriteString("]"); WriteLn; *)
+  WriteLn;
+
+  (* 2-byte: U+00E9 (é) *)
+  bytes := 0;
+  ok := CodePointToUTF8(0E9H, buf, bytes);
+  WriteString("  U+00E9 (é): ");
+  IF ok & (bytes = 2) & (ORD(buf[0]) = 0C3H) & (ORD(buf[1]) = 0A9H) THEN
+    WriteString("PASS");
+  ELSE
+    WriteString("FAIL");
+    allPass := FALSE;
+  END;
+  WriteLn;
+  (* WriteString(" ["); PrintHexBytes(buf, bytes); WriteString("]"); WriteLn; *)
+
+  (* 3-byte: U+20AC (€) *)
+  bytes := 0;
+  ok := CodePointToUTF8(020ACH, buf, bytes);
+  WriteString("  U+20AC (€): ");
+  IF ok & (bytes = 3) & (ORD(buf[0]) = 0E2H) & (ORD(buf[1]) = 082H) & (ORD(buf[2]) = 0ACH) THEN
+    WriteString("PASS");
+  ELSE
+    WriteString("FAIL");
+    allPass := FALSE;
+  END;
+  (* WriteString(" ["); PrintHexBytes(buf, bytes); WriteString("]"); WriteLn; *)
+  WriteLn;
+  
+  (* 4-byte: U+1F496 (💖) *)
+  bytes := 0;
+  ok := CodePointToUTF8(01F496H, buf, bytes);
+  WriteString("  U+1F496 (💖): ");
+  IF ok & (bytes = 4) & (ORD(buf[0]) = 0F0H) & (ORD(buf[1]) = 09FH) & (ORD(buf[2]) = 092H) & (ORD(buf[3]) = 096H) THEN
+    WriteString("PASS");
+  ELSE
+    WriteString("FAIL");
+    allPass := FALSE;
+  END;
+  (* WriteString(" ["); PrintHexBytes(buf, bytes); WriteString("]"); WriteLn; *)
+  WriteLn;
+
+  (* Invalid code point: U+110000 *)
+  bytes := 0;
+  ok := CodePointToUTF8(0110000H, buf, bytes);
+  WriteString("  U+110000 (invalid): ");
+  IF NOT ok & (bytes = 0) THEN
+    WriteString("PASS");
+  ELSE
+    WriteString("FAIL");
+    allPass := FALSE;
+  END;
+  (* WriteString(" ["); PrintHexBytes(buf, bytes); WriteString("]"); WriteLn; *)
+  WriteLn;
+
+  IF allPass THEN
+    WriteString("TestCodePointToUTF8: ALL PASS");
+  ELSE
+    WriteString("TestCodePointToUTF8: SOME FAIL");
+  END;
+  WriteLn;
+END TestCodePointToUTF8;
+
 BEGIN
   TestIsValidUTF8;
   TestSkipBOM;
   TestUTF8CharLen;
+  TestCodePointToUTF8;
 END TestUTF8.

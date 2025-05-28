@@ -1,7 +1,8 @@
 IMPLEMENTATION MODULE UTF8;
 
 FROM StrIO IMPORT WriteString, WriteLn;
-FROM WholeStr IMPORT CardToStr;
+FROM WholeStr IMPORT CardToStr, IntToStr;
+FROM SYSTEM IMPORT SHIFT, CAST;
 
 (* This module provides utilities for handling UTF-8 encoded text,
    including checking validity and skipping the Byte Order Mark (BOM). *)
@@ -11,34 +12,39 @@ FROM WholeStr IMPORT CardToStr;
 (* BOM: EF BB BF in hexadecimal, which corresponds to 0xEF, 0xBB, 0xBF in decimal *)
 
 CONST
-  BOM0 = CHR(0EFH);
-  BOM1 = CHR(0BBH);
-  BOM2 = CHR(0BFH);
+  Bom0 = CHR(0EFH);
+  Bom1 = CHR(0BBH);
+  Bom2 = CHR(0BFH);
+
+  Mask1B = BITSET{7};         (*0b00000000*)
+  Mask2B = BITSET{7,6,5};     (*0b11000000*)
+  Mask3B = BITSET{7,6,5,4};   (*0b11110000*)
+  Mask4B = BITSET{7,6,5,4,3}; (*0b11111000*)
 
 PROCEDURE UTF8CharLen(firstByte: CHAR): CARDINAL;
 VAR
   b: BITSET;
   ord: CARDINAL;
 BEGIN
+
+  (* Masks for UTF-8 character lengths *)
+  
+  (* Check the first byte to determine the length of the UTF-8 character *)
+  (* 1-byte: 0xxxxxxx *)
+  (* 2-byte: 110xxxxx 10xxxxxx *)
+  (* 3-byte: 1110xxxx 10xxxxxx 10xxxxxx *)
+  (* 4-byte: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx *)
   b := VAL(BITSET, firstByte);
-  ord := ORD(firstByte);
-  IF (b * {7}) = {} THEN
+  IF (b * Mask1B) = {} THEN
     RETURN 1;
-  ELSIF (b * {7,6}) = {7,6} THEN
-    IF (b * {5}) = {} THEN
-      RETURN 2;
-    ELSIF (b * {5,4}) = {5} THEN
-      RETURN 3;
-    ELSIF (b * {5,4}) = {5,4} THEN
-      IF ord <= 0F4H THEN
-        RETURN 4;
-      ELSE
-        RETURN 0;
-      END;
-    ELSE
-      RETURN 0;
-    END;
+  ELSIF (b * Mask2B) = BITSET{7,6} THEN
+    RETURN 2;
+  ELSIF (b * Mask3B) = BITSET{7,6,5} THEN
+    RETURN 3;
+  ELSIF (b * Mask4B) = BITSET{7,6,5,4} THEN
+    RETURN 4;
   ELSE
+    (* Invalid first byte for UTF-8 character *)
     RETURN 0;
   END;
 END UTF8CharLen;
@@ -56,7 +62,7 @@ BEGIN
     c := buf[i];
     b := VAL(BITSET, c);
 
-    IF (b * {7}) = {} THEN
+    IF (b * Mask1B) = {} THEN
       (* 1-byte ASCII: 0xxxxxxx *)
       INC(i);
     ELSIF (b * {7,6}) = {7,6} THEN
@@ -95,16 +101,71 @@ BEGIN
     ELSE
       RETURN FALSE;
     END;
-  END;
+  END; 
   RETURN TRUE;
 END IsValidUTF8;
+
+PROCEDURE CodePointToUTF8(codePoint: CARDINAL; VAR buffer: ARRAY OF CHAR; VAR bytesWritten: CARDINAL): BOOLEAN;
+VAR
+  c: CARDINAL;
+  bits: BITSET;
+  mask: BITSET;
+  s: ARRAY [0..3] OF CHAR; (* Temporary buffer for conversion *)
+BEGIN
+  mask := BITSET{0..5}; (* 3FH = 0011 1111B *)
+  IF codePoint <= 7FH THEN
+    (* 1-byte ASCII *)
+    IF HIGH(buffer) < 1 THEN bytesWritten := 0; RETURN FALSE; END;
+    buffer[0] := CHR(codePoint);
+    bytesWritten := 1;
+    RETURN TRUE;
+  ELSIF codePoint <= 7FFH THEN
+    (* 2-byte sequence *)
+    IF HIGH(buffer) < 2 THEN bytesWritten := 0; RETURN FALSE; END;
+    bits := CAST(BITSET, codePoint);
+    buffer[0] := CHR(0C0H + VAL(CARDINAL, SHIFT(bits, -6)));
+    buffer[1] := CHR(080H + VAL(CARDINAL, bits * mask)); 
+    bytesWritten := 2;
+    RETURN TRUE;
+  ELSIF codePoint <= 0FFFFH THEN
+    (* 3-byte sequence *)
+    IF HIGH(buffer) < 3 THEN 
+      bytesWritten := 0; 
+      RETURN FALSE; 
+    END;
+    bits := CAST(BITSET, codePoint);
+    buffer[0] := CHR(0E0H + VAL(CARDINAL, SHIFT(bits, -12)));
+    buffer[1] := CHR(080H + VAL(CARDINAL, (SHIFT(bits, -6)) * mask));  
+    buffer[2] := CHR(080H + VAL(CARDINAL, bits * mask));               
+    bytesWritten := 3;
+    RETURN TRUE;
+  ELSIF codePoint <= 10FFFFH THEN
+    (* 4-byte sequence *)
+    IF HIGH(buffer) < 4 THEN 
+      bytesWritten := 0; 
+    RETURN FALSE; 
+    END;
+    bits := CAST(BITSET, codePoint);
+    buffer[0] := CHR(0F0H + VAL(CARDINAL, SHIFT(bits, -18)));
+    buffer[1] := CHR(080H + VAL(CARDINAL, (SHIFT(bits, -12)) * mask)); 
+    buffer[2] := CHR(080H + VAL(CARDINAL, (SHIFT(bits, -6)) * mask));  
+    buffer[3] := CHR(080H + VAL(CARDINAL, bits * mask));               
+    bytesWritten := 4;
+    RETURN TRUE;
+  ELSE
+    (* Invalid code point *)
+    bytesWritten := 0;
+    RETURN FALSE;
+  END;
+END CodePointToUTF8;
+
 
 PROCEDURE SkipBOM(VAR buf: ARRAY OF CHAR; VAR len: CARDINAL);
 VAR
   i: CARDINAL;
 BEGIN
   IF len >= 3 THEN
-    IF (buf[0] = BOM0) AND (buf[1] = BOM1) AND (buf[2] = BOM2) THEN
+    IF (buf[0] = Bom0) AND (buf[1] = Bom1) AND (buf[2] = Bom2) THEN
       (* Shift buffer left by 3 bytes *)
       FOR i := 0 TO len-4 DO
         buf[i] := buf[i+3];

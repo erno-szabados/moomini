@@ -11,4 +11,8 @@ PROCEDURE IsValidUTF8(buf: ARRAY OF CHAR; len: CARDINAL): BOOLEAN;
 PROCEDURE SkipBOM(VAR buf: ARRAY OF CHAR; VAR len: CARDINAL);
 (* If BOM is present at start, advances buf/len past it *)
 
+PROCEDURE CodePointToUTF8(codePoint: CARDINAL; VAR buffer: ARRAY OF CHAR; VAR bytesWritten: CARDINAL): BOOLEAN;
+(* Converts a Unicode code point to UTF-8 and writes it to buffer.
+   Returns TRUE if successful, FALSE if the code point is invalid or buffer is too small. *)
+
 END UTF8.
