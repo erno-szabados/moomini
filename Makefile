@@ -3,7 +3,7 @@ TEST_DIR = test
 BIN_DIR = bin
 GM2FLAGS = -fiso
 
-GM2 = gm2
+GM2 = gm2-14
 
 SRC_FILES = $(SRC_DIR)/UTF8.mod
 DEF_FILES = $(SRC_DIR)/UTF8.def

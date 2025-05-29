@@ -97,7 +97,6 @@ VAR
   c: CARDINAL;
   bits: BITSET;
   mask: BITSET;
-  s: ARRAY [0..3] OF CHAR; (* Temporary buffer for conversion *)
 BEGIN
   mask := BITSET{0..5}; (* 3FH = 0011 1111B *)
   IF codePoint <= 7FH THEN
