@@ -7,6 +7,7 @@ PROCEDURE IsUtf8Exception(): BOOLEAN;
 
 PROCEDURE CharLen(firstByte: CHAR): CARDINAL;
 (* Returns the number of bytes in a UTF-8 character starting with firstByte *)
+(* Raises an exception if the first byte is not a valid UTF-8 start byte. *)
 
 PROCEDURE IsValid(buf: ARRAY OF CHAR; len: CARDINAL): BOOLEAN;
 (* Returns TRUE if buf[0..len-1] is valid UTF-8 *)

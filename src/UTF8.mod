@@ -46,60 +46,82 @@ BEGIN
   END;
 END CharLen;
 
+(* Helper procedure to validate a 2-byte UTF-8 sequence *)
+PROCEDURE IsValid2ByteSequence(buf: ARRAY OF CHAR; i: CARDINAL): BOOLEAN;
+VAR firstByte: CHAR;
+BEGIN
+  firstByte := buf[i];
+  (* Check continuation byte: must be 10xxxxxx *)
+  IF (VAL(BITSET, buf[i+1]) * {7,6}) # {7} THEN RETURN FALSE END;
+  (* Overlong encoding check: C0, C1 are invalid starts for 2-byte sequences *)
+  IF (ORD(firstByte) = 0C0H) OR (ORD(firstByte) = 0C1H) THEN RETURN FALSE END;
+  RETURN TRUE;
+END IsValid2ByteSequence;
+
+(* Helper procedure to validate a 3-byte UTF-8 sequence *)
+PROCEDURE IsValid3ByteSequence(buf: ARRAY OF CHAR; i: CARDINAL): BOOLEAN;
+VAR firstByte: CHAR;
+BEGIN
+  firstByte := buf[i];
+  (* Check continuation bytes: must be 10xxxxxx *)
+  IF (VAL(BITSET, buf[i+1]) * {7,6}) # {7} THEN RETURN FALSE END;
+  IF (VAL(BITSET, buf[i+2]) * {7,6}) # {7} THEN RETURN FALSE END;
+  (* Overlong and surrogate checks *)
+  IF (ORD(firstByte) = 0E0H) & (ORD(buf[i+1]) < 0A0H) THEN RETURN FALSE END; (* E0 80..9F is overlong *)
+  IF (ORD(firstByte) = 0EDH) & (ORD(buf[i+1]) >= 0A0H) THEN RETURN FALSE END; (* ED A0..BF are surrogates *)
+  RETURN TRUE;
+END IsValid3ByteSequence;
+
+(* Helper procedure to validate a 4-byte UTF-8 sequence *)
+PROCEDURE IsValid4ByteSequence(buf: ARRAY OF CHAR; i: CARDINAL): BOOLEAN;
+VAR firstByte: CHAR;
+BEGIN
+  firstByte := buf[i];
+  (* Check continuation bytes: must be 10xxxxxx *)
+  IF (VAL(BITSET, buf[i+1]) * {7,6}) # {7} THEN RETURN FALSE END;
+  IF (VAL(BITSET, buf[i+2]) * {7,6}) # {7} THEN RETURN FALSE END;
+  IF (VAL(BITSET, buf[i+3]) * {7,6}) # {7} THEN RETURN FALSE END;
+  (* Overlong and range checks *)
+  IF (ORD(firstByte) = 0F0H) & (ORD(buf[i+1]) < 090H) THEN RETURN FALSE END; (* F0 80..8F is overlong *)
+  IF (ORD(firstByte) > 0F4H) OR ((ORD(firstByte) = 0F4H) & (ORD(buf[i+1]) > 08FH)) THEN RETURN FALSE END; (* Code points > U+10FFFF *)
+  RETURN TRUE;
+END IsValid4ByteSequence;
 
 PROCEDURE IsValid(buf: ARRAY OF CHAR; len: CARDINAL): BOOLEAN;
 (* Determine if passed buffer contains a valid UTF-8 sequence. *)
 VAR
   i: CARDINAL;
   c: CHAR;
-  b: BITSET;
+  expectedCharLen: CARDINAL;
 BEGIN
   i := 0;
   WHILE i < len DO
     c := buf[i];
-    b := VAL(BITSET, c);
+    expectedCharLen := CharLen(c);
 
-    IF (b * Mask1B) = {} THEN
-      (* 1-byte ASCII: 0xxxxxxx *)
-      INC(i);
-    ELSIF (b * {7,6}) = {7,6} THEN
-      IF (b * {5}) = {} THEN
-        (* 2-byte sequence: 110xxxxx 10xxxxxx *)
-        IF i+1 >= len THEN RETURN FALSE END;
-        IF (VAL(BITSET, buf[i+1]) * {7,6}) # {7} THEN RETURN FALSE END;
-        (* Overlong encoding check *)
-        IF (ORD(c) = 0C0H) OR (ORD(c) = 0C1H) THEN RETURN FALSE END;
+    (* Check if buffer has enough bytes for the potential sequence *)
+    IF i + expectedCharLen > len THEN RETURN FALSE END;
+
+    (* Validate the sequence based on its expected length *)
+    CASE expectedCharLen OF
+      1: (* 1-byte sequence: 0xxxxxxx *)
+        (* No further checks needed for the byte itself. *)
+        INC(i, 1);
+    | 2: (* 2-byte sequence: 110xxxxx 10xxxxxx *)
+        IF NOT IsValid2ByteSequence(buf, i) THEN RETURN FALSE; END;
         INC(i, 2);
-      ELSE
-        (* 3-byte or 4-byte sequence *)
-        IF (b * {5,4}) = {5} THEN
-          (* 3-byte sequence: 1110xxxx 10xxxxxx 10xxxxxx *)
-          IF i+2 >= len THEN RETURN FALSE END;
-          IF (VAL(BITSET, buf[i+1]) * {7,6}) # {7} THEN RETURN FALSE END;
-          IF (VAL(BITSET, buf[i+2]) * {7,6}) # {7} THEN RETURN FALSE END;
-          (* Overlong and surrogate checks *)
-          IF (ORD(c) = 0E0H) & ((ORD(buf[i+1]) * 0E0H) = 080H) THEN RETURN FALSE END;
-          IF (ORD(c) = 0EDH) & ((ORD(buf[i+1]) * 0E0H) = 0A0H) THEN RETURN FALSE END;
-          INC(i, 3);
-        ELSIF (b * {5,4}) = {5,4} THEN
-          (* 4-byte sequence: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx *)
-          IF i+3 >= len THEN RETURN FALSE END;
-          IF (VAL(BITSET, buf[i+1]) * {7,6}) # {7} THEN RETURN FALSE END;
-          IF (VAL(BITSET, buf[i+2]) * {7,6}) # {7} THEN RETURN FALSE END;
-          IF (VAL(BITSET, buf[i+3]) * {7,6}) # {7} THEN RETURN FALSE END;
-          (* Overlong and range checks *)
-          IF (ORD(c) = 0F0H) & ((ORD(buf[i+1]) * 0F0H) = 080H) THEN RETURN FALSE END;
-          IF (ORD(c) > 0F4H) OR ((ORD(c) = 0F4H) & (ORD(buf[i+1]) > 08FH)) THEN RETURN FALSE END;
-          INC(i, 4);
-        ELSE
-          RETURN FALSE;
-        END;
-      END;
-    ELSE
-      RETURN FALSE;
+    | 3: (* 3-byte sequence: 1110xxxx 10xxxxxx 10xxxxxx *)
+        IF NOT IsValid3ByteSequence(buf, i) THEN RETURN FALSE; END;
+        INC(i, 3);
+    | 4: (* 4-byte sequence: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx *)
+        IF NOT IsValid4ByteSequence(buf, i) THEN RETURN FALSE; END;
+        INC(i, 4);
+    (* ELSE case is not needed as CharLen will raise an exception *)
     END;
-  END; 
+  END;
   RETURN TRUE;
+EXCEPT
+  RETURN FALSE;
 END IsValid;
 
 PROCEDURE CodePointToUTF8(codePoint: CARDINAL; VAR buffer: ARRAY OF CHAR; VAR bytesWritten: CARDINAL): BOOLEAN;
