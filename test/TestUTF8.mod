@@ -18,6 +18,7 @@ BEGIN
 END WriteResult;
 
 PROCEDURE TestCharLen;
+(* Test with valid characters *)
 VAR
   pass: BOOLEAN;
 BEGIN
@@ -42,6 +43,7 @@ BEGIN
 END TestCharLen;
 
 PROCEDURE TestInvalidCharLen;
+(* Test with invalid characters - exception expected. *)
 VAR
   pass: BOOLEAN;
 BEGIN
@@ -57,9 +59,59 @@ EXCEPT
   END;
 END TestInvalidCharLen;
 
-PROCEDURE TestIsValid;
+PROCEDURE CheckIsValid(testName: ARRAY OF CHAR; buf: ARRAY OF CHAR; len: CARDINAL; expected: BOOLEAN);
+VAR
+  pass: BOOLEAN;
 BEGIN
-  (* TODO: Implement test cases for UTF8.IsValid *)
+  pass := UTF8.IsValid(buf, len) = expected;
+  WriteResult(testName, pass);
+END CheckIsValid;
+
+PROCEDURE TestIsValid;
+VAR
+  buf: ARRAY [0..7] OF CHAR;
+BEGIN
+  (* Valid 1-byte ASCII *)
+  buf[0] := CHR(65);  (* 'A' *)
+  CheckIsValid("IsValid: ASCII", buf, 1, TRUE);
+
+  (* Valid 2-byte UTF-8: U+00A2 (¢) = C2 A2 *)
+  buf[0] := CHR(0C2H); buf[1] := CHR(0A2H);
+  CheckIsValid("IsValid: 2-byte", buf, 2, TRUE);
+
+  (* Valid 3-byte UTF-8: U+20AC (€) = E2 82 AC *)
+  buf[0] := CHR(0E2H); buf[1] := CHR(082H); buf[2] := CHR(0ACH);
+  CheckIsValid("IsValid: 3-byte", buf, 3, TRUE);
+
+  (* Valid 4-byte UTF-8: U+1F600 (😀) = F0 9F 98 80 *)
+  buf[0] := CHR(0F0H); buf[1] := CHR(09FH); buf[2] := CHR(098H); buf[3] := CHR(080H);
+  CheckIsValid("IsValid: 4-byte", buf, 4, TRUE);
+
+  (* Invalid: continuation byte as first byte *)
+  buf[0] := CHR(080H);
+  CheckIsValid("IsValid: Invalid start", buf, 1, FALSE);
+
+  (* Invalid: incomplete 2-byte sequence *)
+  buf[0] := CHR(0C2H);
+  CheckIsValid("IsValid: Incomplete 2-byte", buf, 1, FALSE);
+
+  (* Invalid: overlong encoding for ASCII 'A' (should be 1 byte, not 2) *)
+  buf[0] := CHR(0C1H); buf[1] := CHR(0A1H);
+  CheckIsValid("IsValid: Overlong ASCII", buf, 2, FALSE);
+
+  (* Invalid: incomplete 3-byte sequence *)
+  buf[0] := CHR(0E2H); buf[1] := CHR(082H);
+  CheckIsValid("IsValid: Incomplete 3-byte", buf, 2, FALSE);
+
+  (* Invalid: incomplete 4-byte sequence *)
+  buf[0] := CHR(0F0H); buf[1] := CHR(09FH); buf[2] := CHR(098H);
+  CheckIsValid("IsValid: Incomplete 4-byte", buf, 3, FALSE);
+
+  (* Valid: mixed valid sequence *)
+  buf[0] := CHR(65); (* 'A' *)
+  buf[1] := CHR(0C2H); buf[2] := CHR(0A2H); (* ¢ *)
+  buf[3] := CHR(0E2H); buf[4] := CHR(082H); buf[5] := CHR(0ACH); (* € *)
+  CheckIsValid("IsValid: Mixed valid", buf, 6, TRUE);
 END TestIsValid;
 
 PROCEDURE TestCodePointToUTF8;
