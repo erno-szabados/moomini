@@ -3,6 +3,7 @@ IMPLEMENTATION MODULE UTF8;
 FROM StrIO IMPORT WriteString, WriteLn;
 FROM WholeStr IMPORT CardToStr, IntToStr;
 FROM SYSTEM IMPORT SHIFT, CAST;
+IMPORT EXCEPTIONS;
 
 CONST
   Bom0 = CHR(0EFH);
@@ -14,7 +15,17 @@ CONST
   Mask3B = BITSET{7,6,5,4};   (*0b11110000*)
   Mask4B = BITSET{7,6,5,4,3}; (*0b11111000*)
 
-PROCEDURE UTF8CharLen(firstByte: CHAR): CARDINAL;
+VAR 
+  source: EXCEPTIONS.ExceptionSource;
+
+(* Initialize the exception source for UTF-8 errors *)
+
+PROCEDURE IsUtf8Exception(): BOOLEAN;
+BEGIN
+  RETURN EXCEPTIONS.IsCurrentSource(source);
+END IsUtf8Exception;
+
+PROCEDURE CharLen(firstByte: CHAR): CARDINAL;
 (* Determine the length of a UTF-8 character based on the first byte *)
 VAR
   b: BITSET;
@@ -31,12 +42,12 @@ BEGIN
     RETURN 4;
   ELSE
     (* Invalid first byte for UTF-8 character *)
-    RETURN 0;
+    EXCEPTIONS.RAISE(source, 0, "Invalid UTF-8 first byte");
   END;
-END UTF8CharLen;
+END CharLen;
 
 
-PROCEDURE IsValidUTF8(buf: ARRAY OF CHAR; len: CARDINAL): BOOLEAN;
+PROCEDURE IsValid(buf: ARRAY OF CHAR; len: CARDINAL): BOOLEAN;
 (* Determine if passed buffer contains a valid UTF-8 sequence. *)
 VAR
   i: CARDINAL;
@@ -89,7 +100,7 @@ BEGIN
     END;
   END; 
   RETURN TRUE;
-END IsValidUTF8;
+END IsValid;
 
 PROCEDURE CodePointToUTF8(codePoint: CARDINAL; VAR buffer: ARRAY OF CHAR; VAR bytesWritten: CARDINAL): BOOLEAN;
 (* Convert the passed UTF-8 codepoint to a byte sequence. *)
@@ -176,7 +187,7 @@ BEGIN
   IF index > HIGH(byteArray) THEN RETURN FALSE END;
   IF index = HIGH(byteArray) THEN RETURN FALSE END;
   first := byteArray[index];
-  len := UTF8CharLen(first);
+  len := CharLen(first);
   IF len = 0 THEN RETURN FALSE END;
   IF index + len > HIGH(byteArray) + 1 THEN RETURN FALSE END;
 
@@ -225,7 +236,7 @@ BEGIN
 
   (* Now i should point to the first byte of the code point *)
   first := byteArray[i];
-  len := UTF8CharLen(first);
+  len := CharLen(first);
 
   IF (len = 0) OR (i + len > start) OR (i + len > HIGH(byteArray) + 1) OR (i + len <> start) THEN
     RETURN FALSE
@@ -256,4 +267,7 @@ BEGIN
   RETURN TRUE;
 END PrevCodePoint;
 
+
+BEGIN
+  EXCEPTIONS.AllocateSource(source)    
 END UTF8.
