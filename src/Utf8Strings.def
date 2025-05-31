@@ -1,0 +1,116 @@
+DEFINITION MODULE Utf8Strings;
+
+(* Provides operations for handling UTF-8 encoded strings.
+   Character counts and indices are based on UTF-8 code points. *)
+
+TYPE
+  String = OPAQUE POINTER TO ARRAY OF CHAR;
+  (* Internally, this is a pointer to a dynamically allocated
+     array of CHAR (bytes) that holds the NUL-terminated UTF-8 sequence. *)
+
+  CompareResult = (less, equal, greater);
+  (* For Compare procedure. Alternatively, import from an existing Strings module
+     if compatible and desired, e.g., FROM ISOStrings IMPORT CompareResult; *)
+
+PROCEDURE NewString(VAR s: String; sVal: ARRAY OF CHAR);
+(* Creates a new Utf8String 's' initialized with the content of 'sVal'.
+   'sVal' is an array of characters containing a UTF-8 sequence, typically NUL-terminated
+   or sized to fit.
+   The content of 'sVal' is copied. 'sVal' must contain valid UTF-8.
+   Raises an exception (e.g., allocationFailed, invalidUtf8) on failure. *)
+
+PROCEDURE DisposeString(VAR s: String);
+(* Deallocates the memory used by Utf8String 's' and sets 's' to NIL.
+   Does nothing if 's' is already NIL. *)
+
+PROCEDURE Assign(VAR dest: String; source: ARRAY OF CHAR);
+(* Assigns the UTF-8 sequence from 'source' (an array of characters, typically
+   NUL-terminated) to 'dest'.
+   'dest' is (re)allocated as necessary. 'source' must be valid UTF-8.
+   Raises an exception on allocation failure or if 'source' is invalid UTF-8. *)
+
+PROCEDURE AssignString(VAR dest: String; source: String);
+(* Assigns the content of Utf8String 'source' to Utf8String 'dest'.
+   'dest' becomes a copy of 'source'. 'dest' is (re)allocated.
+   Raises an exception on allocation failure. Handles source = NIL. *)
+
+PROCEDURE AssignToArray(VAR arr: ARRAY OF CHAR; s: String);
+(* Copies the content of Utf8String 's' into the character array 'arr'.
+   If 's' is longer than HIGH(arr), the string is truncated.
+   A NUL character is appended if space permits (i.e., if ByteLength(s) < HIGH(arr)+1).
+   If 's' is NIL, 'arr' might be filled with an empty string (a single NUL). *)
+
+PROCEDURE CharLength(s: String): CARDINAL;
+(* Returns the number of UTF-8 characters (code points) in 's'.
+   Returns 0 if 's' is NIL or empty. *)
+
+PROCEDURE ByteLength(s: String): CARDINAL;
+(* Returns the number of bytes used by the UTF-8 sequence in 's' (excluding any NUL terminator
+   if the internal representation uses it only for C compatibility).
+   Returns 0 if 's' is NIL or empty. *)
+
+PROCEDURE CharAt(s: String; charIndex: CARDINAL): String;
+(* Returns a new Utf8String containing the single UTF-8 character at the
+   0-based 'charIndex'.
+   Raises an exception (e.g., indexOutOfBounds) if 'charIndex' is invalid or 's' is NIL.
+   The returned string is a new allocation and must be disposed by the caller.
+   This differs from ISO Strings.CharAt which returns a CHAR, as a UTF-8 char
+   can be multiple bytes. *)
+
+PROCEDURE Copy(VAR dest: String; fromCharIndex: CARDINAL; numChars: CARDINAL; source: String);
+(* Copies 'numChars' UTF-8 characters from 'source', starting at 'fromCharIndex' (0-based),
+   into 'dest'. 'dest' is (re)allocated to fit the copied substring.
+   Raises an exception if indices are out of bounds, 'numChars' is invalid,
+   'source' is NIL, or on allocation failure. If numChars is 0, dest becomes empty. *)
+
+PROCEDURE Append(VAR s1: String; s2: String);
+(* Appends the content of Utf8String 's2' to Utf8String 's1'.
+   's1' is reallocated if necessary. If 's2' is NIL or empty, 's1' is unchanged.
+   If 's1' is NIL, it's equivalent to AssignString(s1, s2).
+   Raises an exception on allocation failure. *)
+
+PROCEDURE Insert(VAR dest: String; source: String; atCharIndex: CARDINAL);
+(* Inserts Utf8String 'source' into Utf8String 'dest' at the 0-based 'atCharIndex'.
+   'dest' is reallocated. If 'source' is NIL or empty, 'dest' is unchanged.
+   Raises an exception if 'atCharIndex' is out of bounds or on allocation failure. *)
+
+PROCEDURE Delete(VAR s: String; fromCharIndex: CARDINAL; numChars: CARDINAL);
+(* Deletes 'numChars' UTF-8 characters from 's', starting at 'fromCharIndex' (0-based).
+   Raises an exception if indices are out of bounds or 'numChars' is invalid.
+   If 'numChars' is 0, 's' is unchanged. If 'numChars' covers the rest of the string,
+   it truncates 's' at 'fromCharIndex'. *)
+
+PROCEDURE Replace(VAR s: String; atCharIndex: CARDINAL; source: String);
+(* Replaces a portion of 's', starting at 'atCharIndex' (0-based), with the content of 'source'.
+   The length of the segment in 's' that is replaced is equal to CharLength(source).
+   's' is reallocated if its capacity needs to change.
+   Raises an exception if 'atCharIndex' is out of bounds for 's' (unless 's' is empty and atCharIndex is 0)
+   or on allocation failure. If 'source' is NIL or empty, this might effectively be a Delete operation
+   or do nothing, depending on desired precise semantics (ISO Strings.Replace is (VAR s:String; p:CARDINAL; s2:String) -
+   this usually implies deleting a segment of s of length(s2) at p, then inserting s2. A simpler interpretation is direct overwrite and resize).
+   Let's assume it overwrites and resizes 's' as needed. *)
+
+PROCEDURE Extract(VAR dest: String; source: String; fromCharIndex: CARDINAL; numChars: CARDINAL);
+(* Extracts 'numChars' UTF-8 characters from 'source', starting at 'fromCharIndex' (0-based),
+   and assigns them to 'dest'. 'dest' is (re)allocated.
+   Functionally similar to Copy, but per ISO Strings, Copy and Extract have distinct signatures
+   with 'VAR dest: String'. Raises an exception for invalid parameters or allocation failure. *)
+
+PROCEDURE Pos(source: String; sub: String; startCharIndex: CARDINAL): CARDINAL;
+(* Returns the 0-based character index of the first occurrence of Utf8String 'sub'
+   within Utf8String 'source', starting the search at 'startCharIndex'.
+   Returns MAX(CARDINAL) if 'sub' is not found, or if 'source' or 'sub' is NIL. *)
+
+PROCEDURE Compare(s1, s2: String): CompareResult;
+(* Compares Utf8String 's1' and 's2' lexicographically based on their UTF-8 code point values.
+   Handles NIL strings (e.g., NIL is considered less than non-NIL, two NILs are equal). *)
+
+PROCEDURE Equal(s1, s2: String): BOOLEAN;
+(* Returns TRUE if Utf8String 's1' and 's2' have identical UTF-8 sequences, FALSE otherwise.
+   Handles NIL strings. *)
+
+PROCEDURE IsValidUtf8(s: String): BOOLEAN;
+(* Returns TRUE if the byte sequence in 's' constitutes a valid UTF-8 string,
+   FALSE otherwise. Returns TRUE if s is NIL or empty. *)
+
+END Utf8Strings.

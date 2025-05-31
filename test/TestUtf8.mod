@@ -1,6 +1,6 @@
-MODULE TestUTF8;
+MODULE TestUtf8;
 
-IMPORT UTF8;
+IMPORT Utf8;
 IMPORT StrIO;
 IMPORT WholeStr;
 IMPORT SYSTEM;
@@ -24,17 +24,17 @@ BEGIN
   pass := TRUE;
 
   (* 1-byte ASCII *)
-  IF UTF8.CharLen(CHR(0)) # 1 THEN pass := FALSE END;
-  IF UTF8.CharLen(CHR(65)) # 1 THEN pass := FALSE END;  (* 'A' *)
+  IF Utf8.CharLen(CHR(0)) # 1 THEN pass := FALSE END;
+  IF Utf8.CharLen(CHR(65)) # 1 THEN pass := FALSE END;  (* 'A' *)
 
   (* 2-byte sequence: 0xC2 (valid start of 2-byte UTF-8) *)
-  IF UTF8.CharLen(CHR(0C2H)) # 2 THEN pass := FALSE END;
+  IF Utf8.CharLen(CHR(0C2H)) # 2 THEN pass := FALSE END;
 
   (* 3-byte sequence: 0xE0 (valid start of 3-byte UTF-8) *)
-  IF UTF8.CharLen(CHR(0E0H)) # 3 THEN pass := FALSE END;
+  IF Utf8.CharLen(CHR(0E0H)) # 3 THEN pass := FALSE END;
 
   (* 4-byte sequence: 0xF0 (valid start of 4-byte UTF-8) *)
-  IF UTF8.CharLen(CHR(0F0H)) # 4 THEN pass := FALSE END;
+  IF Utf8.CharLen(CHR(0F0H)) # 4 THEN pass := FALSE END;
 
   (* Invalid first byte: 0xFF (should raise exception, but here we just check it doesn't return a valid length) *)
   (* This may raise an exception depending on implementation, so we skip this in a simple test *)
@@ -48,7 +48,7 @@ VAR
 BEGIN
   pass := TRUE;
   (* Invalid first byte: (should raise exception) *)
-  IF UTF8.CharLen(CHR(0FFH)) # 0 THEN pass := FALSE END;
+  IF Utf8.CharLen(CHR(0FFH)) # 0 THEN pass := FALSE END;
   WriteResult("TestInvalidCharLen", pass);
 END TestInvalidCharLen;
 
@@ -56,7 +56,7 @@ PROCEDURE CheckIsValid(testName: ARRAY OF CHAR; buf: ARRAY OF CHAR; len: CARDINA
 VAR
   pass: BOOLEAN;
 BEGIN
-  pass := UTF8.IsValid(buf, len) = expected;
+  pass := Utf8.IsValid(buf, len) = expected;
   WriteResult(testName, pass);
 END CheckIsValid;
 
@@ -107,32 +107,70 @@ BEGIN
   CheckIsValid("IsValid: Mixed valid", buf, 6, TRUE);
 END TestIsValid;
 
-PROCEDURE TestCodePointToUTF8;
+PROCEDURE CheckCodePointToUtf8(testName: ARRAY OF CHAR; codePoint: CARDINAL; expected: ARRAY OF CHAR; expectedLen: CARDINAL; expectedResult: BOOLEAN);
+VAR
+  buf: ARRAY [0..7] OF CHAR;
+  bytesWritten: CARDINAL;
+  pass, result: BOOLEAN;
+  i: CARDINAL;
 BEGIN
-  (* TODO: Implement test cases for UTF8.CodePointToUTF8 *)
-END TestCodePointToUTF8;
+  result := Utf8.CodePointToUtf8(codePoint, buf, bytesWritten);
+  pass := (result = expectedResult) AND (bytesWritten = expectedLen);
+  IF pass AND expectedResult THEN
+    FOR i := 0 TO expectedLen-1 DO
+      IF buf[i] # expected[i] THEN pass := FALSE; END;
+    END;
+  END;
+  WriteResult(testName, pass);
+END CheckCodePointToUtf8;
+
+PROCEDURE TestCodePointToUtf8;
+VAR
+  buf: ARRAY [0..2] OF CHAR;
+  bytesWritten: CARDINAL;
+  result: BOOLEAN;
+BEGIN
+  (* 1-byte ASCII: U+0041 'A' *)
+  CheckCodePointToUtf8("CodePointToUtf8: ASCII A", 65, "A", 1, TRUE);
+
+  (* 2-byte: U+00A2 (¢) = C2 A2 *)
+  CheckCodePointToUtf8("CodePointToUtf8: U+00A2", 162, CHR(0C2H) + CHR(0A2H), 2, TRUE);
+
+  (* 3-byte: U+20AC (€) = E2 82 AC *)
+  CheckCodePointToUtf8("CodePointToUtf8: U+20AC", 8364, CHR(0E2H) + CHR(082H) + CHR(0ACH), 3, TRUE);
+
+  (* 4-byte: U+1F600 (😀) = F0 9F 98 80 *)
+  CheckCodePointToUtf8("CodePointToUtf8: U+1F600", 128512, CHR(0F0H) + CHR(09FH) + CHR(098H) + CHR(080H), 4, TRUE);
+
+  (* Invalid: code point > U+10FFFF *)
+  CheckCodePointToUtf8("CodePointToUtf8: Invalid > U+10FFFF", 1114112, "", 0, FALSE);
+
+  (* Invalid: buffer too small for 4-byte sequence *)
+  result := Utf8.CodePointToUtf8(128512, buf, bytesWritten);
+  WriteResult("CodePointToUtf8: Buffer too small", (result = FALSE) AND (bytesWritten = 0));
+END TestCodePointToUtf8;
 
 PROCEDURE TestSkipBOM;
 BEGIN
-  (* TODO: Implement test cases for UTF8.SkipBOM *)
+  (* TODO: Implement test cases for Utf8.SkipBOM *)
 END TestSkipBOM;
 
 PROCEDURE TestNextCodePoint;
 BEGIN
-  (* TODO: Implement test cases for UTF8.NextCodePoint *)
+  (* TODO: Implement test cases for Utf8.NextCodePoint *)
 END TestNextCodePoint;
 
 PROCEDURE TestPrevCodePoint;
 BEGIN
-  (* TODO: Implement test cases for UTF8.PrevCodePoint *)
+  (* TODO: Implement test cases for Utf8.PrevCodePoint *)
 END TestPrevCodePoint;
 
 BEGIN
   TestCharLen;
   TestInvalidCharLen;
   TestIsValid;
-  TestCodePointToUTF8;
+  TestCodePointToUtf8;
   TestSkipBOM;
   TestNextCodePoint;
   TestPrevCodePoint;
-END TestUTF8.
+END TestUtf8.

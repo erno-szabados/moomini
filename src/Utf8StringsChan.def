@@ -1,0 +1,100 @@
+DEFINITION MODULE Utf8StringChan;
+
+(* Provides channel-based I/O for Utf8Strings.String objects.
+   Operations are UTF-8 aware. *)
+
+IMPORT IOChan, Utf8Strings, ChanConsts, IOResult;
+(* May also need IOLink or StreamFile depending on the depth of implementation
+   and what channel properties are exposed. *)
+
+TYPE
+  ChanId = IOChan.ChanId;
+  OpenResults = ChanConsts.OpenResults; (* Result for Open operations if connecting to external source *)
+  ReadResults = IOResult.ReadResults;   (* Result for read operations *)
+  (* Add other necessary types from IOChan, e.g., LookAheadOptions, if used. *)
+
+PROCEDURE Connect(VAR cid: ChanId; str: Utf8Strings.String);
+(* Connects a new channel 'cid' to the given Utf8Strings.String 'str'.
+   The channel can then be used for reading from 'str' and potentially writing to it,
+   modifying 'str' (if 'str' is not NIL) or an internal buffer if 'str' is NIL.
+   If 'str' is NIL, an new empty internal string buffer is associated with 'cid'.
+   The read/write position is typically set to the beginning.
+   Semantics for read/write access (e.g. read-only, write-append, write-overwrite)
+   can be further refined, possibly with flags like in StreamFile.Open.
+   For simplicity here, assume it allows reading from and writing to (modifying) 'str'. *)
+
+PROCEDURE Disconnect(VAR cid: ChanId; VAR str: Utf8Strings.String);
+(* Disconnects the channel 'cid'.
+   The current content of the channel's internal string buffer is assigned to 'str'.
+   If 'cid' was connected to an existing string, 'str' will reflect its final state.
+   If 'cid' was managing its own buffer (e.g., if connected with a NIL string),
+   a new Utf8String is allocated for 'str' (or 'str' is updated if it was already allocated).
+   The caller might need to dispose of the original 'str' if it's replaced by a new allocation.
+   After disconnection, 'cid' becomes invalid. *)
+
+PROCEDURE IsUtf8StringChan(cid: ChanId): BOOLEAN;
+(* Returns TRUE if 'cid' is a channel connected via Utf8StringChan.Connect,
+   FALSE otherwise. *)
+
+(* UTF-8 aware I/O operations (mirroring TextIO where appropriate) *)
+
+PROCEDURE ReadChar(cid: ChanId; VAR ch: Utf8Strings.String; VAR res: ReadResults);
+(* Reads the next single UTF-8 character from channel 'cid' into Utf8String 'ch'.
+   'ch' will be a newly allocated or reassigned string of character length 1.
+   'res' indicates the outcome (e.g., charRead, endOfLine, endOfInput). *)
+
+PROCEDURE WriteChar(cid: ChanId; ch: Utf8Strings.String);
+(* Writes a single UTF-8 character, represented by Utf8String 'ch', to channel 'cid'.
+   It's expected that CharLength(ch) is 1. If not, behavior is undefined or an error occurs. *)
+
+PROCEDURE ReadString(cid: ChanId; VAR str: ARRAY OF CHAR; VAR res: ReadResults);
+(* Reads UTF-8 encoded text from channel 'cid' into the byte array 'str' until:
+   - 'str' is full (respecting its HIGH index),
+   - an end-of-line (EOLN) sequence is encountered, or
+   - end-of-input (EOF) is reached.
+   The read sequence is NUL-terminated in 'str' if space permits.
+   'res' indicates the outcome.
+   This procedure must ensure that only complete UTF-8 characters are written to 'str',
+   unless 'str' is too small to hold even one character or truncation is unavoidable.
+   The EOLN sequence is typically consumed but not included in 'str'. *)
+
+PROCEDURE WriteString(cid: ChanId; str: ARRAY OF CHAR);
+(* Writes the NUL-terminated (or up to HIGH(str)) character array 'str' to channel 'cid'.
+   'str' is assumed to contain a valid UTF-8 sequence. *)
+
+PROCEDURE WriteUtf8(cid: ChanId; str: Utf8Strings.String);
+(* Writes the content of the Utf8Strings.String 'str' to channel 'cid'.
+   If 'str' is NIL, this operation might do nothing or write an empty sequence. *)
+
+PROCEDURE ReadLine(cid: ChanId; VAR str: Utf8Strings.String; VAR res: ReadResults);
+(* Reads a line of UTF-8 text from channel 'cid' into Utf8String 'str'.
+   Reading stops at EOLN or EOF. EOLN is consumed but not included in 'str'.
+   'str' is (re)allocated to fit the line.
+   'res' indicates the outcome. *)
+
+PROCEDURE WriteLn(cid: ChanId);
+(* Writes an end-of-line sequence (e.g., LF or CRLF depending on system convention
+   for text channels) to channel 'cid'. *)
+
+(* Optional: Procedures to manage the underlying string buffer directly *)
+PROCEDURE GetString(cid: ChanId; VAR str: Utf8Strings.String);
+(* Retrieves a copy of the current content of the channel's internal string buffer
+   into 'str'. 'str' is (re)allocated. Useful for peeking at the buffer. *)
+
+PROCEDURE SetString(cid: ChanId; str: Utf8Strings.String);
+(* Sets the content of the channel's internal string buffer to a copy of 'str'.
+   The current read/write position is typically reset to the beginning.
+   This effectively reinitializes the channel with new content. *)
+
+(* Optional: Position and Length in terms of BYTES for the underlying buffer *)
+PROCEDURE ChanPos(cid : ChanId) : LONGINT;
+(* Returns the current byte position for reading/writing in the channel. *)
+
+PROCEDURE SetChanPos(cid : ChanId; pos : LONGINT);
+(* Sets the current byte position. Use with caution as setting to the middle
+   of a UTF-8 character can lead to invalid states. *)
+
+PROCEDURE BufferByteLength(cid : ChanId) : LONGINT;
+(* Returns the total byte length of the content in the channel's buffer. *)
+
+END Utf8StringChan.

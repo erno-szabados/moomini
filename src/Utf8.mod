@@ -1,4 +1,4 @@
-IMPLEMENTATION MODULE UTF8;
+IMPLEMENTATION MODULE Utf8;
 
 FROM StrIO IMPORT WriteString, WriteLn;
 FROM WholeStr IMPORT CardToStr, IntToStr;
@@ -115,7 +115,7 @@ BEGIN
   RETURN TRUE;
 END IsValid;
 
-PROCEDURE CodePointToUTF8(codePoint: CARDINAL; VAR buffer: ARRAY OF CHAR; VAR bytesWritten: CARDINAL): BOOLEAN;
+PROCEDURE CodePointToUtf8(codePoint: CARDINAL; VAR buffer: ARRAY OF CHAR; VAR bytesWritten: CARDINAL): BOOLEAN;
 (* Convert the passed UTF-8 codepoint to a byte sequence. *)
 VAR
   c: CARDINAL;
@@ -167,7 +167,7 @@ BEGIN
     bytesWritten := 0;
     RETURN FALSE;
   END;
-END CodePointToUTF8;
+END CodePointToUtf8;
 
 
 PROCEDURE SkipBOM(VAR buf: ARRAY OF CHAR; VAR len: CARDINAL);
@@ -282,4 +282,4 @@ END PrevCodePoint;
 
 
 BEGIN
-END UTF8.
+END Utf8.

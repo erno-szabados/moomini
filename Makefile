@@ -5,33 +5,33 @@ GM2FLAGS = -fiso
 
 GM2 = gm2-14
 
-SRC_FILES = $(SRC_DIR)/UTF8.mod
-DEF_FILES = $(SRC_DIR)/UTF8.def
+SRC_FILES = $(SRC_DIR)/Utf8.mod
+DEF_FILES = $(SRC_DIR)/Utf8.def
 
 all: test
 
-$(BIN_DIR)/UTF8.o: $(SRC_DIR)/UTF8.mod $(SRC_DIR)/UTF8.def | $(BIN_DIR)
-	$(GM2) $(GM2FLAGS) -I$(SRC_DIR) -c $(SRC_DIR)/UTF8.mod -o $(BIN_DIR)/UTF8.o
+$(BIN_DIR)/Utf8.o: $(SRC_DIR)/Utf8.mod $(SRC_DIR)/Utf8.def | $(BIN_DIR)
+	$(GM2) $(GM2FLAGS) -I$(SRC_DIR) -c $(SRC_DIR)/Utf8.mod -o $(BIN_DIR)/Utf8.o
 
-$(BIN_DIR)/TestUTF8: $(BIN_DIR)/UTF8.o $(TEST_FILES) | $(BIN_DIR)
-	$(GM2) $(GM2FLAGS) -I$(SRC_DIR) $(TEST_DIR)/TestUTF8.mod $(BIN_DIR)/UTF8.o -o $(BIN_DIR)/TestUTF8
+$(BIN_DIR)/TestUtf8: $(BIN_DIR)/Utf8.o $(TEST_FILES) | $(BIN_DIR)
+	$(GM2) $(GM2FLAGS) -I$(SRC_DIR) $(TEST_DIR)/TestUtf8.mod $(BIN_DIR)/Utf8.o -o $(BIN_DIR)/TestUtf8
 
-$(BIN_DIR)/TestUTF8FileWrite: $(BIN_DIR)/UTF8.o $(TEST_FILES) | $(BIN_DIR)
-	$(GM2) $(GM2FLAGS) -I$(SRC_DIR) $(TEST_DIR)/TestUTF8FileWrite.mod $(BIN_DIR)/UTF8.o -o $(BIN_DIR)/TestUTF8FileWrite
+$(BIN_DIR)/TestUtf8FileWrite: $(BIN_DIR)/Utf8.o $(TEST_FILES) | $(BIN_DIR)
+	$(GM2) $(GM2FLAGS) -I$(SRC_DIR) $(TEST_DIR)/TestUtf8FileWrite.mod $(BIN_DIR)/Utf8.o -o $(BIN_DIR)/TestUtf8FileWrite
 
-test: testUTF8 testUTF8FileWrite
+test: testUtf8 testUtf8FileWrite
 
-testUTF8: $(BIN_DIR)/TestUTF8
-	$(BIN_DIR)/TestUTF8
+testUtf8: $(BIN_DIR)/TestUtf8
+	$(BIN_DIR)/TestUtf8
 
-testUTF8FileWrite: $(BIN_DIR)/TestUTF8FileWrite
-	$(BIN_DIR)/TestUTF8FileWrite
+testUtf8FileWrite: $(BIN_DIR)/TestUtf8FileWrite
+	$(BIN_DIR)/TestUtf8FileWrite
 
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
 clean:
 	rm -rf $(BIN_DIR)
-	rm *.o
+	rm -f *.o
 
 .PHONY: all clean test
