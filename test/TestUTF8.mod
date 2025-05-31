@@ -4,7 +4,6 @@ IMPORT UTF8;
 IMPORT StrIO;
 IMPORT WholeStr;
 IMPORT SYSTEM;
-IMPORT EXCEPTIONS;
 
 PROCEDURE WriteResult(testName: ARRAY OF CHAR; pass: BOOLEAN);
 BEGIN
@@ -47,16 +46,10 @@ PROCEDURE TestInvalidCharLen;
 VAR
   pass: BOOLEAN;
 BEGIN
-  pass := FALSE;
+  pass := TRUE;
   (* Invalid first byte: (should raise exception) *)
-  IF UTF8.CharLen(CHR(0FFH)) # 2 THEN END;
+  IF UTF8.CharLen(CHR(0FFH)) # 0 THEN pass := FALSE END;
   WriteResult("TestInvalidCharLen", pass);
-EXCEPT
-  IF UTF8.IsUtf8Exception() THEN    
-    pass := TRUE;  (* Exception raised as expected *)
-    WriteResult("TestInvalidCharLen", pass);
-    RETURN;
-  END;
 END TestInvalidCharLen;
 
 PROCEDURE CheckIsValid(testName: ARRAY OF CHAR; buf: ARRAY OF CHAR; len: CARDINAL; expected: BOOLEAN);

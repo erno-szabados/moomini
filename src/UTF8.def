@@ -2,12 +2,9 @@ DEFINITION MODULE UTF8;
 
 (* This module implements UTF-8 utility procedures. *)
 
-PROCEDURE IsUtf8Exception(): BOOLEAN;
-(* Returns TRUE if the current exception is a UTF-8 related error *)
-
 PROCEDURE CharLen(firstByte: CHAR): CARDINAL;
 (* Returns the number of bytes in a UTF-8 character starting with firstByte *)
-(* Raises an exception if the first byte is not a valid UTF-8 start byte. *)
+(* Returns 0 for an invalid byte sequence. *)
 
 PROCEDURE IsValid(buf: ARRAY OF CHAR; len: CARDINAL): BOOLEAN;
 (* Returns TRUE if buf[0..len-1] is valid UTF-8 *)

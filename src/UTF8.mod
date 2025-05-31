@@ -3,7 +3,6 @@ IMPLEMENTATION MODULE UTF8;
 FROM StrIO IMPORT WriteString, WriteLn;
 FROM WholeStr IMPORT CardToStr, IntToStr;
 FROM SYSTEM IMPORT SHIFT, CAST;
-IMPORT EXCEPTIONS;
 
 CONST
   Bom0 = CHR(0EFH);
@@ -15,15 +14,6 @@ CONST
   Mask3B = BITSET{7,6,5,4};   (*0b11110000*)
   Mask4B = BITSET{7,6,5,4,3}; (*0b11111000*)
 
-VAR 
-  source: EXCEPTIONS.ExceptionSource;
-
-(* Initialize the exception source for UTF-8 errors *)
-
-PROCEDURE IsUtf8Exception(): BOOLEAN;
-BEGIN
-  RETURN EXCEPTIONS.IsCurrentSource(source);
-END IsUtf8Exception;
 
 PROCEDURE CharLen(firstByte: CHAR): CARDINAL;
 (* Determine the length of a UTF-8 character based on the first byte *)
@@ -41,8 +31,7 @@ BEGIN
   ELSIF (b * Mask4B) = BITSET{7,6,5,4} THEN
     RETURN 4;
   ELSE
-    (* Invalid first byte for UTF-8 character *)
-    EXCEPTIONS.RAISE(source, 0, "Invalid UTF-8 first byte");
+    RETURN 0;
   END;
 END CharLen;
 
@@ -98,6 +87,10 @@ BEGIN
   WHILE i < len DO
     c := buf[i];
     expectedCharLen := CharLen(c);
+    IF expectedCharLen = 0 THEN
+      (* Invalid first byte, return FALSE *)
+      RETURN FALSE;
+    END;
 
     (* Check if buffer has enough bytes for the potential sequence *)
     IF i + expectedCharLen > len THEN RETURN FALSE END;
@@ -116,12 +109,10 @@ BEGIN
     | 4: (* 4-byte sequence: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx *)
         IF NOT IsValid4ByteSequence(buf, i) THEN RETURN FALSE; END;
         INC(i, 4);
-    (* ELSE case is not needed as CharLen will raise an exception *)
+    (* ELSE case is not needed as CharLen will return 0 on error. *)
     END;
   END;
   RETURN TRUE;
-EXCEPT
-  RETURN FALSE;
 END IsValid;
 
 PROCEDURE CodePointToUTF8(codePoint: CARDINAL; VAR buffer: ARRAY OF CHAR; VAR bytesWritten: CARDINAL): BOOLEAN;
@@ -291,5 +282,4 @@ END PrevCodePoint;
 
 
 BEGIN
-  EXCEPTIONS.AllocateSource(source)    
 END UTF8.
