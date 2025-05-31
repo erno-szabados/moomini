@@ -186,17 +186,14 @@ BEGIN
 END HasBOM;
 
 
-PROCEDURE NextChar(VAR byteArray: ARRAY OF CHAR; VAR index: CARDINAL; VAR codePoint: CARDINAL): BOOLEAN;
-(* Reads the next UTF-8 character (code point) from a byte array, advances the index, and returns the code point.  *)
-(* Returns FALSE if the end of the array is reached or an invalid sequence is encountered. *)
+(* Helper procedure to decode a UTF-8 sequence into a Unicode code point *)
+PROCEDURE DecodeCodePoint(byteArray: ARRAY OF CHAR; index: CARDINAL; VAR codePoint: CARDINAL): BOOLEAN;
+(* Given a starting index of a UTF-8 sequence, validate it and decode the code point *)
 VAR
   first: CHAR;
   len: CARDINAL;
   cp: CARDINAL;
 BEGIN
-  (* Check for end of buffer *)
-  IF index > HIGH(byteArray) THEN RETURN FALSE END;
-  
   (* Get first byte and determine sequence length *)
   first := byteArray[index];
   len := CharLen(first);
@@ -225,6 +222,25 @@ BEGIN
   END;
 
   codePoint := cp;
+  RETURN TRUE;
+END DecodeCodePoint;
+
+PROCEDURE NextChar(VAR byteArray: ARRAY OF CHAR; VAR index: CARDINAL; VAR codePoint: CARDINAL): BOOLEAN;
+(* Reads the next UTF-8 character (code point) from a byte array, advances the index, and returns the code point.  *)
+(* Returns FALSE if the end of the array is reached or an invalid sequence is encountered. *)
+VAR
+  len: CARDINAL;
+BEGIN
+  (* Check for end of buffer *)
+  IF index > HIGH(byteArray) THEN RETURN FALSE END;
+  
+  (* Decode the code point *)
+  IF NOT DecodeCodePoint(byteArray, index, codePoint) THEN 
+    RETURN FALSE 
+  END;
+  
+  (* Advance index by the length of the sequence *)
+  len := CharLen(byteArray[index]);
   INC(index, len);
   RETURN TRUE;
 END NextChar;
@@ -235,8 +251,6 @@ PROCEDURE PrevChar(VAR byteArray: ARRAY OF CHAR; VAR index: CARDINAL; VAR codePo
 VAR
   start, i, len: CARDINAL;
   b: BITSET;
-  first: CHAR;
-  cp: CARDINAL;
 BEGIN
   (* Check for invalid index or empty array *)
   IF (index = 0) OR (HIGH(byteArray) < 0) THEN RETURN FALSE END;
@@ -253,8 +267,7 @@ BEGIN
   END;
 
   (* Check if we found a valid start byte *)
-  first := byteArray[i];
-  len := CharLen(first);
+  len := CharLen(byteArray[i]);
   IF len = 0 THEN RETURN FALSE END;
 
   (* Check for incomplete or invalid sequence *)
@@ -262,25 +275,11 @@ BEGIN
     RETURN FALSE;
   END;
 
-  (* Validate sequence based on length *)
-  CASE len OF
-    1: (* 1-byte ASCII, no additional validation needed *)
-      cp := ORD(first);
-  | 2: (* 2-byte sequence *)
-      IF NOT IsValid2ByteSequence(byteArray, i) THEN RETURN FALSE END;
-      cp := ((ORD(first) - 0C0H) * 64) + (ORD(byteArray[i+1]) - 080H);
-  | 3: (* 3-byte sequence *)
-      IF NOT IsValid3ByteSequence(byteArray, i) THEN RETURN FALSE END;
-      cp := ((ORD(first) - 0E0H) * 4096) + ((ORD(byteArray[i+1]) - 080H) * 64) + (ORD(byteArray[i+2]) - 080H);
-  | 4: (* 4-byte sequence *)
-      IF NOT IsValid4ByteSequence(byteArray, i) THEN RETURN FALSE END;
-      cp := ((ORD(first) - 0F0H) * 262144) + ((ORD(byteArray[i+1]) - 080H) * 4096) +
-            ((ORD(byteArray[i+2]) - 080H) * 64) + (ORD(byteArray[i+3]) - 080H);
-  ELSE
-    RETURN FALSE;
+  (* Decode the code point *)
+  IF NOT DecodeCodePoint(byteArray, i, codePoint) THEN
+    RETURN FALSE
   END;
-
-  codePoint := cp;
+  
   index := i;
   RETURN TRUE;
 END PrevChar;
