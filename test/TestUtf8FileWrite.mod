@@ -25,19 +25,19 @@ VAR
 BEGIN
   (* Build UTF-8 string: "A é € 💖" *)
   p := ADR(buf[0]);
-  ok := Utf8.CodePointToUtf8(ORD('A'), tmp, bytes);
+  ok := Utf8.Encode(ORD('A'), tmp, 0, bytes);
   FOR i := 0 TO bytes-1 DO p^ := tmp[i]; INC(p); END;
   p^ := ' '; INC(p);
 
-  ok := ok & Utf8.CodePointToUtf8(0E9H, tmp, bytes);
+  ok := ok & Utf8.Encode(0E9H, tmp, 0, bytes);
   FOR i := 0 TO bytes-1 DO p^ := tmp[i]; INC(p); END;
   p^ := ' '; INC(p);
 
-  ok := ok & Utf8.CodePointToUtf8(020ACH, tmp, bytes);
+  ok := ok & Utf8.Encode(020ACH, tmp, 0, bytes);
   FOR i := 0 TO bytes-1 DO p^ := tmp[i]; INC(p); END;
   p^ := ' '; INC(p);
 
-  ok := ok & Utf8.CodePointToUtf8(01F496H, tmp, bytes);
+  ok := ok & Utf8.Encode(01F496H, tmp, 0, bytes);
   FOR i := 0 TO bytes-1 DO p^ := tmp[i]; INC(p); END;
 
   (* Null-terminate *)

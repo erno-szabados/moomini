@@ -1,5 +1,7 @@
 IMPLEMENTATION MODULE Utf8;
 
+(* This module implements UTF-8 encoding and utility procedures. *)
+
 FROM StrIO IMPORT WriteString, WriteLn;
 FROM WholeStr IMPORT CardToStr, IntToStr;
 FROM SYSTEM IMPORT SHIFT, CAST;
@@ -115,8 +117,8 @@ BEGIN
   RETURN TRUE;
 END IsValid;
 
-PROCEDURE CodePointToUtf8(codePoint: CARDINAL; VAR buffer: ARRAY OF CHAR; VAR bytesWritten: CARDINAL): BOOLEAN;
-(* Convert the passed UTF-8 codepoint to a byte sequence. *)
+PROCEDURE Encode(codePoint: CARDINAL; VAR buffer: ARRAY OF CHAR; index: CARDINAL; VAR bytesWritten: CARDINAL): BOOLEAN;
+(* Convert the passed UTF-8 codepoint to a byte sequence at buffer[index]. *)
 VAR
   c: CARDINAL;
   bits: BITSET;
@@ -125,41 +127,41 @@ BEGIN
   mask := BITSET{0..5}; (* 3FH = 0011 1111B *)
   IF codePoint <= 7FH THEN
     (* 1-byte ASCII *)
-    IF HIGH(buffer) < 1 THEN bytesWritten := 0; RETURN FALSE; END;
-    buffer[0] := CHR(codePoint);
+    IF HIGH(buffer) < index THEN bytesWritten := 0; RETURN FALSE; END;
+    buffer[index] := CHR(codePoint);
     bytesWritten := 1;
     RETURN TRUE;
   ELSIF codePoint <= 7FFH THEN
     (* 2-byte sequence *)
-    IF HIGH(buffer) < 2 THEN bytesWritten := 0; RETURN FALSE; END;
+    IF HIGH(buffer) < index+1 THEN bytesWritten := 0; RETURN FALSE; END;
     bits := CAST(BITSET, codePoint);
-    buffer[0] := CHR(0C0H + VAL(CARDINAL, SHIFT(bits, -6)));
-    buffer[1] := CHR(080H + VAL(CARDINAL, bits * mask)); 
+    buffer[index] := CHR(0C0H + VAL(CARDINAL, SHIFT(bits, -6)));
+    buffer[index+1] := CHR(080H + VAL(CARDINAL, bits * mask)); 
     bytesWritten := 2;
     RETURN TRUE;
   ELSIF codePoint <= 0FFFFH THEN
     (* 3-byte sequence *)
-    IF HIGH(buffer) < 3 THEN 
+    IF HIGH(buffer) < index+2 THEN 
       bytesWritten := 0; 
       RETURN FALSE; 
     END;
     bits := CAST(BITSET, codePoint);
-    buffer[0] := CHR(0E0H + VAL(CARDINAL, SHIFT(bits, -12)));
-    buffer[1] := CHR(080H + VAL(CARDINAL, (SHIFT(bits, -6)) * mask));  
-    buffer[2] := CHR(080H + VAL(CARDINAL, bits * mask));               
+    buffer[index] := CHR(0E0H + VAL(CARDINAL, SHIFT(bits, -12)));
+    buffer[index+1] := CHR(080H + VAL(CARDINAL, (SHIFT(bits, -6)) * mask));  
+    buffer[index+2] := CHR(080H + VAL(CARDINAL, bits * mask));               
     bytesWritten := 3;
     RETURN TRUE;
   ELSIF codePoint <= 10FFFFH THEN
     (* 4-byte sequence *)
-    IF HIGH(buffer) < 4 THEN 
+    IF HIGH(buffer) < index+3 THEN 
       bytesWritten := 0; 
-    RETURN FALSE; 
+      RETURN FALSE; 
     END;
     bits := CAST(BITSET, codePoint);
-    buffer[0] := CHR(0F0H + VAL(CARDINAL, SHIFT(bits, -18)));
-    buffer[1] := CHR(080H + VAL(CARDINAL, (SHIFT(bits, -12)) * mask)); 
-    buffer[2] := CHR(080H + VAL(CARDINAL, (SHIFT(bits, -6)) * mask));  
-    buffer[3] := CHR(080H + VAL(CARDINAL, bits * mask));               
+    buffer[index] := CHR(0F0H + VAL(CARDINAL, SHIFT(bits, -18)));
+    buffer[index+1] := CHR(080H + VAL(CARDINAL, (SHIFT(bits, -12)) * mask)); 
+    buffer[index+2] := CHR(080H + VAL(CARDINAL, (SHIFT(bits, -6)) * mask));  
+    buffer[index+3] := CHR(080H + VAL(CARDINAL, bits * mask));               
     bytesWritten := 4;
     RETURN TRUE;
   ELSE
@@ -167,59 +169,57 @@ BEGIN
     bytesWritten := 0;
     RETURN FALSE;
   END;
-END CodePointToUtf8;
+END Encode;
 
 
-PROCEDURE SkipBOM(VAR buf: ARRAY OF CHAR; VAR len: CARDINAL);
-(* Modify the passed buffer by copying it to skip the UTF-8 BOM. *)
+PROCEDURE HasBOM(buffer: ARRAY OF CHAR; len: CARDINAL): BOOLEAN;
+(* Returns TRUE if passed buffer starts with the 3-byte UTF-8 BOM, FALSE otherwise. *)
 VAR
   i: CARDINAL;
 BEGIN
   IF len >= 3 THEN
-    IF (buf[0] = Bom0) AND (buf[1] = Bom1) AND (buf[2] = Bom2) THEN
-      (* Shift buffer left by 3 bytes *)
-      FOR i := 0 TO len-4 DO
-        buf[i] := buf[i+3];
-      END;
-      len := len - 3;
+    IF (buffer[0] = Bom0) AND (buffer[1] = Bom1) AND (buffer[2] = Bom2) THEN
+      RETURN TRUE;
     END;
   END;
-END SkipBOM;
+  RETURN FALSE;
+END HasBOM;
 
 
-PROCEDURE NextCodePoint(VAR byteArray: ARRAY OF CHAR; VAR index: CARDINAL; VAR codePoint: CARDINAL): BOOLEAN;
+PROCEDURE NextChar(VAR byteArray: ARRAY OF CHAR; VAR index: CARDINAL; VAR codePoint: CARDINAL): BOOLEAN;
 (* Reads the next UTF-8 character (code point) from a byte array, advances the index, and returns the code point.  *)
 (* Returns FALSE if the end of the array is reached or an invalid sequence is encountered. *)
 VAR
   first: CHAR;
   len: CARDINAL;
-  i: CARDINAL;
-  b: BITSET;
   cp: CARDINAL;
 BEGIN
+  (* Check for end of buffer *)
   IF index > HIGH(byteArray) THEN RETURN FALSE END;
-  IF index = HIGH(byteArray) THEN RETURN FALSE END;
+  
+  (* Get first byte and determine sequence length *)
   first := byteArray[index];
   len := CharLen(first);
+  
+  (* Early validation *)
   IF len = 0 THEN RETURN FALSE END;
   IF index + len > HIGH(byteArray) + 1 THEN RETURN FALSE END;
 
-  (* Check continuation bytes *)
-  FOR i := 1 TO len-1 DO
-    b := VAL(BITSET, byteArray[index + i]);
-    IF (b * BITSET{7,6}) # BITSET{7} THEN RETURN FALSE END;
-  END;
-
-  (* Decode code point *)
-  IF len = 1 THEN
-    cp := ORD(first);
-  ELSIF len = 2 THEN
-    cp := ((ORD(first) - 0C0H) * 64) + (ORD(byteArray[index+1]) - 080H);
-  ELSIF len = 3 THEN
-    cp := ((ORD(first) - 0E0H) * 4096) + ((ORD(byteArray[index+1]) - 080H) * 64) + (ORD(byteArray[index+2]) - 080H);
-  ELSIF len = 4 THEN
-    cp := ((ORD(first) - 0F0H) * 262144) + ((ORD(byteArray[index+1]) - 080H) * 4096) +
-          ((ORD(byteArray[index+2]) - 080H) * 64) + (ORD(byteArray[index+3]) - 080H);
+  (* Validate sequence based on length *)
+  CASE len OF
+    1: (* 1-byte ASCII, no additional validation needed *)
+      cp := ORD(first);
+  | 2: (* 2-byte sequence *)
+      IF NOT IsValid2ByteSequence(byteArray, index) THEN RETURN FALSE END;
+      cp := ((ORD(first) - 0C0H) * 64) + (ORD(byteArray[index+1]) - 080H);
+  | 3: (* 3-byte sequence *)
+      IF NOT IsValid3ByteSequence(byteArray, index) THEN RETURN FALSE END;
+      cp := ((ORD(first) - 0E0H) * 4096) + ((ORD(byteArray[index+1]) - 080H) * 64) + 
+            (ORD(byteArray[index+2]) - 080H);
+  | 4: (* 4-byte sequence *)
+      IF NOT IsValid4ByteSequence(byteArray, index) THEN RETURN FALSE END;
+      cp := ((ORD(first) - 0F0H) * 262144) + ((ORD(byteArray[index+1]) - 080H) * 4096) +
+            ((ORD(byteArray[index+2]) - 080H) * 64) + (ORD(byteArray[index+3]) - 080H);
   ELSE
     RETURN FALSE;
   END;
@@ -227,50 +227,55 @@ BEGIN
   codePoint := cp;
   INC(index, len);
   RETURN TRUE;
-END NextCodePoint;
+END NextChar;
 
-PROCEDURE PrevCodePoint(VAR byteArray: ARRAY OF CHAR; VAR index: CARDINAL; VAR codePoint: CARDINAL): BOOLEAN;
-(* Reads the previous UTF-8 character (code point) from a byte array, moves index back, and returns the code point. *)
+PROCEDURE PrevChar(VAR byteArray: ARRAY OF CHAR; VAR index: CARDINAL; VAR codePoint: CARDINAL): BOOLEAN;
+(* Reads the previous UTF-8 character (code point) from a byte array, retracts the index, and returns the code point.  *)
+(* Returns FALSE if the start of the array is reached or an invalid sequence is encountered. *)
 VAR
   start, i, len: CARDINAL;
   b: BITSET;
   first: CHAR;
   cp: CARDINAL;
 BEGIN
-  IF index = 0 THEN RETURN FALSE END;
+  (* Check for invalid index or empty array *)
+  IF (index = 0) OR (HIGH(byteArray) < 0) THEN RETURN FALSE END;
   start := index;
 
   (* Move back to the first byte of the previous code point *)
-  i := start - 1;
+  i := start;
+  IF i = 0 THEN RETURN FALSE END;
+  DEC(i);
+
   (* At most 3 continuation bytes before a leading byte *)
   WHILE (i > 0) & ((VAL(BITSET, byteArray[i]) * BITSET{7,6}) = BITSET{7}) DO
     DEC(i);
   END;
 
-  (* Now i should point to the first byte of the code point *)
+  (* Check if we found a valid start byte *)
   first := byteArray[i];
   len := CharLen(first);
+  IF len = 0 THEN RETURN FALSE END;
 
-  IF (len = 0) OR (i + len > start) OR (i + len > HIGH(byteArray) + 1) OR (i + len <> start) THEN
-    RETURN FALSE
+  (* Check for incomplete or invalid sequence *)
+  IF (i + len > HIGH(byteArray) + 1) OR (i + len <> start) THEN
+    RETURN FALSE;
   END;
 
-  (* Check continuation bytes *)
-  FOR start := 1 TO len-1 DO
-    b := VAL(BITSET, byteArray[i + start]);
-    IF (b * BITSET{7,6}) # BITSET{7} THEN RETURN FALSE END;
-  END;
-
-  (* Decode code point *)
-  IF len = 1 THEN
-    cp := ORD(first);
-  ELSIF len = 2 THEN
-    cp := ((ORD(first) - 0C0H) * 64) + (ORD(byteArray[i+1]) - 080H);
-  ELSIF len = 3 THEN
-    cp := ((ORD(first) - 0E0H) * 4096) + ((ORD(byteArray[i+1]) - 080H) * 64) + (ORD(byteArray[i+2]) - 080H);
-  ELSIF len = 4 THEN
-    cp := ((ORD(first) - 0F0H) * 262144) + ((ORD(byteArray[i+1]) - 080H) * 4096) +
-          ((ORD(byteArray[i+2]) - 080H) * 64) + (ORD(byteArray[i+3]) - 080H);
+  (* Validate sequence based on length *)
+  CASE len OF
+    1: (* 1-byte ASCII, no additional validation needed *)
+      cp := ORD(first);
+  | 2: (* 2-byte sequence *)
+      IF NOT IsValid2ByteSequence(byteArray, i) THEN RETURN FALSE END;
+      cp := ((ORD(first) - 0C0H) * 64) + (ORD(byteArray[i+1]) - 080H);
+  | 3: (* 3-byte sequence *)
+      IF NOT IsValid3ByteSequence(byteArray, i) THEN RETURN FALSE END;
+      cp := ((ORD(first) - 0E0H) * 4096) + ((ORD(byteArray[i+1]) - 080H) * 64) + (ORD(byteArray[i+2]) - 080H);
+  | 4: (* 4-byte sequence *)
+      IF NOT IsValid4ByteSequence(byteArray, i) THEN RETURN FALSE END;
+      cp := ((ORD(first) - 0F0H) * 262144) + ((ORD(byteArray[i+1]) - 080H) * 4096) +
+            ((ORD(byteArray[i+2]) - 080H) * 64) + (ORD(byteArray[i+3]) - 080H);
   ELSE
     RETURN FALSE;
   END;
@@ -278,7 +283,7 @@ BEGIN
   codePoint := cp;
   index := i;
   RETURN TRUE;
-END PrevCodePoint;
+END PrevChar;
 
 
 BEGIN
