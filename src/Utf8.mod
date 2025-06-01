@@ -21,7 +21,6 @@ PROCEDURE CharLen(firstByte: CHAR): CARDINAL;
 (* Determine the length of a UTF-8 character based on the first byte *)
 VAR
   b: BITSET;
-  ord: CARDINAL;
 BEGIN
   b := VAL(BITSET, firstByte);
   IF (b * Mask1B) = {} THEN
@@ -175,7 +174,6 @@ END Encode;
 PROCEDURE HasBOM(buffer: ARRAY OF CHAR; len: CARDINAL): BOOLEAN;
 (* Returns TRUE if passed buffer starts with the 3-byte UTF-8 BOM, FALSE otherwise. *)
 VAR
-  i: CARDINAL;
 BEGIN
   IF len >= 3 THEN
     IF (buffer[0] = Bom0) AND (buffer[1] = Bom1) AND (buffer[2] = Bom2) THEN

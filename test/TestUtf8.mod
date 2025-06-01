@@ -36,6 +36,8 @@ BEGIN
   (* 4-byte sequence: 0xF0 (valid start of 4-byte UTF-8) *)
   IF Utf8.CharLen(CHR(0F0H)) # 4 THEN pass := FALSE END;
 
+  IF Utf8.CharLen(CHR(0FFH)) # 0 THEN pass := FALSE END;
+
   (* Invalid first byte: 0xFF (should raise exception, but here we just check it doesn't return a valid length) *)
   (* This may raise an exception depending on implementation, so we skip this in a simple test *)
   WriteResult("TestCharLen", pass);
